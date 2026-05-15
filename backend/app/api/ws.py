@@ -3,7 +3,10 @@ import asyncio
 import json
 from typing import Set
 
-from fastapi import APIRouter, WebSocket, WebSocketDisconnect
+from fastapi import APIRouter, WebSocket, WebSocketDisconnect, Query
+from jose import JWTError, jwt
+
+from app.config import settings
 
 router = APIRouter(tags=["WebSocket"])
 
@@ -26,16 +29,26 @@ async def broadcast(message: dict) -> None:
 
 
 @router.websocket("/api/ws/alerts")
-async def ws_alerts(websocket: WebSocket):
+async def ws_alerts(websocket: WebSocket, token: str = Query(...)):
     """
-    WebSocket 端点：/api/ws/alerts
-    客户端连接后接收实时预警推送。
-    服务端每30秒发送心跳包保持连接活跃。
+    WebSocket 端点：/api/ws/alerts?token=<jwt>
+
+    JWT 鉴权后保持长连接，服务端可调用 broadcast() 向所有客户端推送预警。
+    客户端可发送 {"type":"ping"} 维持心跳，超时 30s 服务端自动发心跳。
     """
+    # JWT 鉴权
+    try:
+        payload = jwt.decode(token, settings.SECRET_KEY, algorithms=[settings.ALGORITHM])
+        if not payload.get("sub"):
+            await websocket.close(code=4001)
+            return
+    except JWTError:
+        await websocket.close(code=4001)
+        return
+
     await websocket.accept()
     _active_connections.add(websocket)
     try:
-        # 发送欢迎消息
         await websocket.send_text(json.dumps({
             "type": "connected",
             "message": "已连接到煤质预警推送服务",
@@ -43,14 +56,18 @@ async def ws_alerts(websocket: WebSocket):
 
         while True:
             try:
-                # 等待客户端消息（支持 ping/pong）
                 data = await asyncio.wait_for(websocket.receive_text(), timeout=30.0)
-                msg = json.loads(data)
-                if msg.get("type") == "ping":
-                    await websocket.send_text(json.dumps({"type": "pong"}))
+                try:
+                    msg = json.loads(data)
+                    if msg.get("type") == "ping":
+                        await websocket.send_text(json.dumps({"type": "pong"}))
+                except json.JSONDecodeError:
+                    pass
             except asyncio.TimeoutError:
-                # 超时发送心跳
-                await websocket.send_text(json.dumps({"type": "heartbeat"}))
+                try:
+                    await websocket.send_text(json.dumps({"type": "heartbeat"}))
+                except Exception:
+                    break
     except WebSocketDisconnect:
         pass
     except Exception:

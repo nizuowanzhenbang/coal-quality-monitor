@@ -95,7 +95,37 @@ class QualityEngine:
 
         for a in created:
             db.refresh(a)
+
+        # 异步广播新预警到所有 WebSocket 客户端
+        if created:
+            self._broadcast(batch, created)
+
         return created
+
+    @staticmethod
+    def _broadcast(batch: CoalBatch, alerts: List[QualityAlert]) -> None:
+        """将新预警推送给所有在线客户端（失败静默）"""
+        try:
+            import asyncio
+            from app.api.ws import broadcast
+            loop = asyncio.get_event_loop()
+            for alert in alerts:
+                payload = {
+                    "type": "new_alert",
+                    "data": {
+                        "id": alert.id,
+                        "batch_id": alert.batch_id,
+                        "batch_number": batch.batch_number,
+                        "alert_type": alert.alert_type.value,
+                        "severity": alert.severity.value,
+                        "description": alert.description,
+                        "created_at": alert.created_at.isoformat() if alert.created_at else None,
+                    },
+                }
+                if loop.is_running():
+                    asyncio.ensure_future(broadcast(payload))
+        except Exception:
+            pass
 
     def _check_calorific(
         self, port: QualityTest, factory: QualityTest, batch: CoalBatch
