@@ -5,6 +5,7 @@ import {
   AlertOutlined,
   RiseOutlined,
   ThunderboltOutlined,
+  CarOutlined,
 } from '@ant-design/icons'
 import ReactECharts from 'echarts-for-react'
 import type { EChartsOption } from 'echarts'
@@ -29,6 +30,9 @@ const ALERT_TYPE_LABEL: Record<string, string> = {
   CONTRACT_ASH_BREACH: '灰分违约',
   CONTRACT_SULFUR_BREACH: '硫分违约',
   COMPREHENSIVE: '综合异常',
+  TRANSPORT_WEIGHT: '运输重量异常',
+  TRANSPORT_TIME: '运输超时',
+  TRANSPORT_SEAL: '铅封异常',
 }
 
 export default function Dashboard() {
@@ -310,7 +314,7 @@ export default function Dashboard() {
 
       {/* KPI 卡片行 */}
       <Row gutter={[16, 16]} style={{ marginBottom: 20 }}>
-        <Col xs={24} sm={12} lg={6}>
+        <Col xs={24} sm={12} lg={5}>
           <Card loading={loading}>
             <Statistic
               title="总批次数"
@@ -324,7 +328,7 @@ export default function Dashboard() {
             />
           </Card>
         </Col>
-        <Col xs={24} sm={12} lg={6}>
+        <Col xs={24} sm={12} lg={5}>
           <Card loading={loading}>
             <Statistic
               title="待处理预警"
@@ -339,7 +343,7 @@ export default function Dashboard() {
             />
           </Card>
         </Col>
-        <Col xs={24} sm={12} lg={6}>
+        <Col xs={24} sm={12} lg={5}>
           <Card loading={loading}>
             <Statistic
               title="综合异常率"
@@ -351,7 +355,7 @@ export default function Dashboard() {
             />
           </Card>
         </Col>
-        <Col xs={24} sm={12} lg={6}>
+        <Col xs={24} sm={12} lg={5}>
           <Card loading={loading}>
             <Statistic
               title="平均热值偏差"
@@ -360,6 +364,16 @@ export default function Dashboard() {
               suffix="%"
               valueStyle={{ color: calorificDeviationColor }}
               prefix={<ThunderboltOutlined style={{ color: calorificDeviationColor }} />}
+            />
+          </Card>
+        </Col>
+        <Col xs={24} sm={12} lg={4}>
+          <Card loading={loading}>
+            <Statistic
+              title="运输预警"
+              value={overview?.transport_alerts ?? 0}
+              valueStyle={{ color: (overview?.transport_alerts ?? 0) > 0 ? '#fa8c16' : '#52c41a' }}
+              prefix={<CarOutlined style={{ color: '#fa8c16' }} />}
             />
           </Card>
         </Col>

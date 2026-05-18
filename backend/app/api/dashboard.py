@@ -81,6 +81,16 @@ def overview(
         .scalar() or 0
     )
 
+    transport_alerts = (
+        db.query(func.count(QualityAlert.id))
+        .filter(QualityAlert.alert_type.in_([
+            AlertType.TRANSPORT_WEIGHT,
+            AlertType.TRANSPORT_TIME,
+            AlertType.TRANSPORT_SEAL,
+        ]))
+        .scalar() or 0
+    )
+
     return api_response(data={
         "total_batches": total_batches,
         "today_batches": today_batches,
@@ -90,6 +100,7 @@ def overview(
         "avg_calorific_deviation": avg_cal_deviation,
         "total_suppliers": total_suppliers,
         "active_suppliers": active_suppliers,
+        "transport_alerts": transport_alerts,
     })
 
 

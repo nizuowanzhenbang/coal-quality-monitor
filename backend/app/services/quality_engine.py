@@ -33,6 +33,9 @@ class QualityEngine:
         AlertType.CONTRACT_ASH_BREACH: 0.25,
         AlertType.CONTRACT_SULFUR_BREACH: 0.20,
         AlertType.COMPREHENSIVE: 0.05,
+        AlertType.TRANSPORT_WEIGHT: 0.35,
+        AlertType.TRANSPORT_TIME: 0.15,
+        AlertType.TRANSPORT_SEAL: 0.30,
     }
     # 严重程度系数
     SEVERITY_FACTORS = {Severity.GENERAL: 1.0, Severity.SEVERE: 2.0}

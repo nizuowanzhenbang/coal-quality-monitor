@@ -16,7 +16,7 @@ from app.models.test import QualityTest
 from app.models.alert import QualityAlert
 from app.database import Base
 
-from app.api import auth, batches, tests, alerts, suppliers, dashboard, export, ws
+from app.api import auth, batches, tests, alerts, suppliers, dashboard, export, ws, integration
 
 
 def _create_default_admin(db) -> None:
@@ -83,6 +83,7 @@ app.include_router(suppliers.router)
 app.include_router(dashboard.router)
 app.include_router(export.router)
 app.include_router(ws.router)
+app.include_router(integration.router)
 
 
 # ── 健康检查 ──────────────────────────────────────────────────────────────────

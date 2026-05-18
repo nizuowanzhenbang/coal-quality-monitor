@@ -44,6 +44,9 @@ class Settings(BaseSettings):
     # 供应商评分窗口（最近N个批次）
     SUPPLIER_SCORE_WINDOW: int = 20
 
+    # 闭环集成：运输监督系统
+    INTEGRATION_SECRET: str = "coal-integration-shared-secret"
+
     model_config = {"env_file": ".env", "case_sensitive": True}
 
 

@@ -92,6 +92,9 @@ export type AlertType =
   | 'CONTRACT_ASH_BREACH'
   | 'CONTRACT_SULFUR_BREACH'
   | 'COMPREHENSIVE'
+  | 'TRANSPORT_WEIGHT'
+  | 'TRANSPORT_TIME'
+  | 'TRANSPORT_SEAL'
 
 export type Severity = 'GENERAL' | 'SEVERE'
 export type AlertStatus = 'PENDING' | 'ACKNOWLEDGED' | 'RESOLVED' | 'DISMISSED'
@@ -126,6 +129,7 @@ export interface OverviewData {
   avg_calorific_deviation: number
   total_suppliers: number
   active_suppliers: number
+  transport_alerts: number
 }
 
 export interface QualityTrendItem {

@@ -6,16 +6,26 @@ from app.models.supplier import Supplier
 from app.models.alert import QualityAlert, Severity, AlertType
 from app.config import settings
 
+TRANSPORT_ALERT_TYPES = {
+    AlertType.TRANSPORT_WEIGHT,
+    AlertType.TRANSPORT_TIME,
+    AlertType.TRANSPORT_SEAL,
+}
+
 
 class SupplierScorer:
     """
-    基于最近 N 个批次的质量表现给供应商打分（0-100）。
-    评分规则：
-    - 起始分 100 分
+    基于最近 N 个批次的质量+运输表现给供应商打分（0-100）。
+
+    评分规则（质量维度）：
     - 无预警批次：不扣分
     - 仅一般预警：每批 -3 分
     - 含严重预警：每批 -10 分
     - 含综合异常：每批 -15 分
+
+    评分规则（运输维度，叠加扣分）：
+    - 含运输一般预警：额外 -2 分
+    - 含运输严重预警：额外 -5 分
     """
 
     def recalculate(self, supplier: Supplier, db: Session) -> float:
@@ -32,26 +42,39 @@ class SupplierScorer:
         )
 
         if not recent_batches:
-            # 无历史批次，保持当前分不变
             return supplier.credit_score
 
         score = 100.0
         for batch in recent_batches:
             alerts = db.query(QualityAlert).filter(QualityAlert.batch_id == batch.id).all()
             if not alerts:
-                # 无预警批次不扣分
-                pass
-            else:
+                continue
+
+            quality_alerts = [a for a in alerts if a.alert_type not in TRANSPORT_ALERT_TYPES]
+            transport_alerts = [a for a in alerts if a.alert_type in TRANSPORT_ALERT_TYPES]
+
+            # 质量维度扣分
+            if quality_alerts:
                 has_comprehensive = any(
-                    a.alert_type == AlertType.COMPREHENSIVE for a in alerts
+                    a.alert_type == AlertType.COMPREHENSIVE for a in quality_alerts
                 )
-                has_severe = any(a.severity == Severity.SEVERE for a in alerts)
+                has_severe = any(a.severity == Severity.SEVERE for a in quality_alerts)
                 if has_comprehensive:
                     score -= 15
                 elif has_severe:
                     score -= 10
                 else:
                     score -= 3
+
+            # 运输维度叠加扣分
+            if transport_alerts:
+                has_transport_severe = any(
+                    a.severity == Severity.SEVERE for a in transport_alerts
+                )
+                if has_transport_severe:
+                    score -= 5
+                else:
+                    score -= 2
 
         score = max(0.0, min(100.0, score))
         supplier.credit_score = round(score, 1)

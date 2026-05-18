@@ -37,6 +37,9 @@ const ALERT_TYPE_LABEL: Record<AlertType, string> = {
   CONTRACT_ASH_BREACH: '灰分违约',
   CONTRACT_SULFUR_BREACH: '硫分违约',
   COMPREHENSIVE: '综合异常',
+  TRANSPORT_WEIGHT: '运输重量异常',
+  TRANSPORT_TIME: '运输超时',
+  TRANSPORT_SEAL: '铅封异常',
 }
 
 const ALERT_STATUS_LABEL: Record<AlertStatus, { label: string; color: string }> = {

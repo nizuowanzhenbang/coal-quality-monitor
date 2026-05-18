@@ -15,6 +15,10 @@ class AlertType(str, enum.Enum):
     CONTRACT_ASH_BREACH = "CONTRACT_ASH_BREACH"       # 合同灰分违约
     CONTRACT_SULFUR_BREACH = "CONTRACT_SULFUR_BREACH" # 合同硫分违约
     COMPREHENSIVE = "COMPREHENSIVE"                   # 综合异常（多指标同时偏差）
+    # 运输监督闭环预警（来自 coal-transport-monitor）
+    TRANSPORT_WEIGHT = "TRANSPORT_WEIGHT"             # 运输重量异常
+    TRANSPORT_TIME = "TRANSPORT_TIME"                 # 运输超时
+    TRANSPORT_SEAL = "TRANSPORT_SEAL"                 # 铅封异常
 
 
 class Severity(str, enum.Enum):
