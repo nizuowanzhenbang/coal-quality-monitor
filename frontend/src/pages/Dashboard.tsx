@@ -73,7 +73,7 @@ export default function Dashboard() {
 
   useAlertWebSocket({
     onNewAlert: useCallback(
-      (data) => {
+      (data: Extract<import('../types').WsMessage, { type: 'new_alert' }>['data']) => {
         notifApi.warning({
           message: `新预警：${ALERT_TYPE_LABEL[data.alert_type] ?? data.alert_type}`,
           description: data.description,
@@ -217,7 +217,6 @@ export default function Dashboard() {
           return [[min, min], [max, max]]
         })(),
         tooltip: { show: false },
-        legend: { show: false },
       },
       {
         name: '正常（≤1%）',
