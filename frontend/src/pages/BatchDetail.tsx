@@ -26,7 +26,7 @@ import ReactECharts from 'echarts-for-react'
 import type { EChartsOption } from 'echarts'
 import { useParams, useNavigate } from 'react-router-dom'
 import { batchApi, alertApi } from '../api'
-import type { CoalBatch, QualityTest, QualityAlert, BatchStatus, AlertType, Severity, AlertStatus } from '../types'
+import type { CoalBatch, QualityAlert, BatchStatus, AlertType, Severity, AlertStatus } from '../types'
 
 const { Title, Text } = Typography
 
