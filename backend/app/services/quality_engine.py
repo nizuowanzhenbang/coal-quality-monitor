@@ -1,6 +1,6 @@
 """质量分析引擎"""
 from dataclasses import dataclass
-from typing import List, Optional
+from typing import List, Optional, Sequence
 from datetime import datetime, timezone
 from sqlalchemy.orm import Session
 
@@ -23,6 +23,16 @@ class AlertData:
 
 
 class QualityEngine:
+    QUALITY_ALERT_TYPES = (
+        AlertType.CALORIFIC_SHORTAGE,
+        AlertType.ASH_EXCESS,
+        AlertType.SULFUR_EXCESS,
+        AlertType.MOISTURE_EXCESS,
+        AlertType.CONTRACT_CAL_BREACH,
+        AlertType.CONTRACT_ASH_BREACH,
+        AlertType.CONTRACT_SULFUR_BREACH,
+        AlertType.COMPREHENSIVE,
+    )
     # 各预警类型权重
     TYPE_WEIGHTS = {
         AlertType.CALORIFIC_SHORTAGE: 0.40,
@@ -46,8 +56,8 @@ class QualityEngine:
         1. 找到港口和入厂两份化验记录
         2. 逐指标比对，生成预警数据
         3. 检查综合异常
-        4. 删除旧预警，写入新预警（幂等）
-        5. 更新批次状态和风险评分
+        4. 仅替换本引擎的质量预警，保留运输预警及其处理记录
+        5. 按全部预警更新批次状态和风险评分
         """
         port_test = None
         factory_test = None
@@ -67,8 +77,10 @@ class QualityEngine:
         all_data.extend(self._check_moisture(port_test, factory_test))
         all_data.extend(self._check_comprehensive(all_data))
 
-        # 删除该批次旧预警后重新写入（重新评估时幂等）
-        db.query(QualityAlert).filter(QualityAlert.batch_id == batch.id).delete()
+        db.query(QualityAlert).filter(
+            QualityAlert.batch_id == batch.id,
+            QualityAlert.alert_type.in_(self.QUALITY_ALERT_TYPES),
+        ).delete(synchronize_session="fetch")
 
         created: List[QualityAlert] = []
         for d in all_data:
@@ -86,14 +98,17 @@ class QualityEngine:
             db.add(a)
             created.append(a)
 
-        if created:
-            has_severe = any(a.severity == Severity.SEVERE for a in created)
+        # autoflush may be disabled; include newly generated and retained rows.
+        db.flush()
+        combined = db.query(QualityAlert).filter(QualityAlert.batch_id == batch.id).all()
+        if combined:
+            has_severe = any(a.severity == Severity.SEVERE for a in combined)
             batch.status = BatchStatus.SEVERE if has_severe else BatchStatus.ALERT
         else:
             batch.status = BatchStatus.COMPLETED
 
-        batch.alert_count = len(created)
-        batch.risk_score = round(self._compute_risk_score(all_data), 2)
+        batch.alert_count = len(combined)
+        batch.risk_score = round(self._compute_risk_score(combined), 2)
         db.commit()
 
         for a in created:
@@ -375,7 +390,7 @@ class QualityEngine:
             )]
         return []
 
-    def _compute_risk_score(self, alerts: List[AlertData]) -> float:
+    def _compute_risk_score(self, alerts: Sequence[AlertData | QualityAlert]) -> float:
         """
         计算综合风险评分：
         score = Σ(预警类型权重 × 严重度系数)
