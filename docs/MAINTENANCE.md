@@ -10,7 +10,7 @@
 python -m pip install -r backend/requirements.txt pytest httpx ruff
 python -m ruff check backend --select E9,F63,F7,F82
 cd backend && python -m pytest tests -q
-cd frontend
+cd ../frontend
 npm ci --no-audit --no-fund
 npm run build
 ```
