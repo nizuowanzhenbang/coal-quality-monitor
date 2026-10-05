@@ -1,9 +1,10 @@
 """化验记录接口"""
 from datetime import datetime, timezone
-from typing import Optional
+from math import isfinite
+from typing import Annotated, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query
-from pydantic import BaseModel
+from pydantic import BaseModel, BeforeValidator, FiniteFloat
 from sqlalchemy.orm import Session, joinedload
 
 from app.api.deps import get_db, get_current_user, require_operator
@@ -18,20 +19,30 @@ router = APIRouter(prefix="/api/tests", tags=["化验记录"])
 
 # ── Pydantic 模型 ──────────────────────────────────────────────────────────────
 
+def _normalize_nonfinite_input(value: object) -> object:
+    """将解析后的非有限数转成文本，确保校验错误详情可以序列化为 JSON。"""
+    if isinstance(value, float) and not isfinite(value):
+        return str(value)
+    return value
+
+
+FiniteMeasurement = Annotated[FiniteFloat, BeforeValidator(_normalize_nonfinite_input)]
+
+
 class TestCreateIn(BaseModel):
     batch_id: int
     test_type: TestType
     test_org: Optional[str] = None
     test_time: Optional[datetime] = None
     report_number: Optional[str] = None
-    calorific_value_net: Optional[float] = None
-    calorific_value_gross: Optional[float] = None
-    ash_content: Optional[float] = None
-    sulfur_content: Optional[float] = None
-    moisture_total: Optional[float] = None
-    moisture_inherent: Optional[float] = None
-    volatile_matter: Optional[float] = None
-    fixed_carbon: Optional[float] = None
+    calorific_value_net: Optional[FiniteMeasurement] = None
+    calorific_value_gross: Optional[FiniteMeasurement] = None
+    ash_content: Optional[FiniteMeasurement] = None
+    sulfur_content: Optional[FiniteMeasurement] = None
+    moisture_total: Optional[FiniteMeasurement] = None
+    moisture_inherent: Optional[FiniteMeasurement] = None
+    volatile_matter: Optional[FiniteMeasurement] = None
+    fixed_carbon: Optional[FiniteMeasurement] = None
     notes: Optional[str] = None
 
 
@@ -39,14 +50,14 @@ class TestUpdateIn(BaseModel):
     test_org: Optional[str] = None
     test_time: Optional[datetime] = None
     report_number: Optional[str] = None
-    calorific_value_net: Optional[float] = None
-    calorific_value_gross: Optional[float] = None
-    ash_content: Optional[float] = None
-    sulfur_content: Optional[float] = None
-    moisture_total: Optional[float] = None
-    moisture_inherent: Optional[float] = None
-    volatile_matter: Optional[float] = None
-    fixed_carbon: Optional[float] = None
+    calorific_value_net: Optional[FiniteMeasurement] = None
+    calorific_value_gross: Optional[FiniteMeasurement] = None
+    ash_content: Optional[FiniteMeasurement] = None
+    sulfur_content: Optional[FiniteMeasurement] = None
+    moisture_total: Optional[FiniteMeasurement] = None
+    moisture_inherent: Optional[FiniteMeasurement] = None
+    volatile_matter: Optional[FiniteMeasurement] = None
+    fixed_carbon: Optional[FiniteMeasurement] = None
     notes: Optional[str] = None
 
 
