@@ -152,3 +152,9 @@ coal-quality-monitor/
 ## 2026-10-05 化验输入维护
 
 化验创建和修改的8项指标拒绝NaN、无穷大及指数溢出，异常请求返回422且不改变已有记录。见[自动化验证与内部招聘案例](docs/LAB-FINITE-VALUES.md)。
+
+## 化验输入口径与缺项
+
+化验创建/修改可显式提供 `calorific_value_unit`（kcal/kg 或 MJ/kg）和 `measurement_bases`；库内统一 kcal/kg，各列沿用 ar/ad/d 既定基准，单位换算仅作用于本次提交热值。项目宽范围保护为热值 0–10000 kcal/kg、百分数 0–100。缺省/null 与数值零含义不同。
+
+批次详情和评估返回 `assessment`：港口/入厂净热值、灰分、全硫、全水四项非空才完整。缺项不代表合格，已知质量/运输预警仍保持。详情页仅在六项齐全时显示雷达，合同标签按原始数值比较。设计和实际发布台账见 [口径说明](docs/specs/2026-10-11-measurement-contract.md) 与 [执行计划](docs/plans/2026-10-11-measurement-contract.md)。

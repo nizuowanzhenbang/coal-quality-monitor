@@ -5,8 +5,8 @@
 - [x] 从现有 JWT/SQLite HTTP fixture 建立范围拒绝无副作用、单位换算/局部更新、基准拒绝、完整性、零热值、极小基数回归；确认业务失败。
 - [x] 实现共享 measurement contract、DTO 及双端输出；完整性与安全比值应用到质量引擎及比较接口，保留运输证据和状态优先级。
 - [x] 修复前端响应读取、基准和缺项显示；完整后端、ruff、pip check、前端构建通过后推送，保存 implemented 检查点。
-- [ ] 一次整分支审查及实际新会话恢复演练；重要问题先失败再修复，更新台账。固定候选 CI 成功后合并，复核 main CI。
-- [ ] 更新中央发布索引/核心摘要，保存实际 merged/释放操作及下一批第一动作；在线核验和最终中央 CI。
+- [x] 尝试一次独立整分支审查并完成新会话恢复；最终报告受限的边界已记录，收到的重要问题先失败再修复。父代理检查、候选 CI 和实际 main CI 通过后合并。
+- [x] 更新中央发布索引/核心摘要，保存实际 merged/释放操作及下一批第一动作；在线核验和最终中央 CI。
 
 ## 执行台账
 
@@ -27,3 +27,9 @@ Reviewer 在固定 56c3a176 分支复跑完整 192 项并核对 PR #4 候选 CI 
 前端增加 Node 内置测试及已有 esbuild 的显式开发依赖，测试实际渲染标签；CI 在构建前运行六项回归。第一次 Node --test 输出文件位于 node_modules，被 Node24 的发现规则排除；改为 .test-output 并忽略生成物后才取得业务 RED，未把 runner 路径错误作为业务失败。
 
 修复后的实际验证：完整后端 201 passed，前端六项 AntD 标签渲染 6 passed，TypeScript/Vite 构建、ruff、pip check 和 diff 检查通过。父代理检查了整个范围的 DTO、两处序列化、评估/运输保留、React 数值传递及 CI 配置，未将最终报告受限写成独立批准。修复候选将推送并以实际 SHA/检查验收；最后两项集成/签收待发布后关闭。
+
+## 发布签收
+
+实际 PR #4 squash 合并 26bdbef9360e7b2ea2f037114adbf63ffdabb947；修复候选 CI 38141089655 与合并 main CI 38141214245 的 backend/frontend 全成功。中央 merged 状态提交 04650d970563025f245c4e8a1131d1c201c60c1d，release 8bffef3b032e8b269883c58aa618c96a9f2879e9。中央最终摘要/发布索引签收 37914694644c6730573018d4e0683247d973b7e1，其 Progress checks 38141498168 成功；在线核验五个明确索引的交付通过。
+
+本批四项完成，SESSION 无活动认领；下一批 PP-030/040 均待核查。后续从 [中央 CURRENT](https://github.com/nizuowanzhenbang/smart-power-plant/blob/main/progress/CURRENT.md) 与 SESSION 接续，不重复本计划已验收阶段。最终独立审查报告未生成的验证边界保持，未写成完整独立批准。
