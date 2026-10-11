@@ -2,6 +2,7 @@
 import pytest
 
 from tests.test_lab_finite_values import api, NORMAL, METRICS, create, data, prepare, assert_rejected, snapshot
+from app.models.alert import QualityAlert
 
 
 BASES = dict(zip(METRICS, ('ar', 'ad', 'd', 'd', 'ar', 'ad', 'd', 'd')))
@@ -121,4 +122,6 @@ def test_subnormal_baseline_has_json_safe_ratios_and_retains_absolute_alerts(api
     if field in ['ash_content', 'sulfur_content', 'moisture_total']:
         assert detail['alerts']
         assert all(a['deviation_rate'] is None for a in detail['alerts'])
+        with api.factory() as db:
+            assert all(a.deviation_rate is None for a in db.query(QualityAlert).all())
     assert data(api.client.get('/api/alerts')) is not None

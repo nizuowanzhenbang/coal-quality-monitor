@@ -13,6 +13,7 @@ from app.models.alert import QualityAlert
 from app.models.supplier import Supplier
 from app.models.user import User
 from app.services.quality_engine import QualityEngine
+from app.services.measurements import HeatMeasurement, PercentMeasurement, measurement_metadata, assessment, safe_rate
 from app.utils.helpers import api_response, paginate_response
 
 router = APIRouter(prefix="/api/batches", tags=["批次管理"])
@@ -28,10 +29,10 @@ class BatchCreateIn(BaseModel):
     arrival_plant: Optional[str] = None
     contract_quantity: Optional[float] = None
     actual_quantity: Optional[float] = None
-    contract_calorific_value: Optional[float] = None
-    contract_ash_max: Optional[float] = None
-    contract_sulfur_max: Optional[float] = None
-    contract_moisture_max: Optional[float] = None
+    contract_calorific_value: Optional[HeatMeasurement] = None
+    contract_ash_max: Optional[PercentMeasurement] = None
+    contract_sulfur_max: Optional[PercentMeasurement] = None
+    contract_moisture_max: Optional[PercentMeasurement] = None
     arrival_date: Optional[datetime] = None
     notes: Optional[str] = None
 
@@ -42,10 +43,10 @@ class BatchUpdateIn(BaseModel):
     arrival_plant: Optional[str] = None
     contract_quantity: Optional[float] = None
     actual_quantity: Optional[float] = None
-    contract_calorific_value: Optional[float] = None
-    contract_ash_max: Optional[float] = None
-    contract_sulfur_max: Optional[float] = None
-    contract_moisture_max: Optional[float] = None
+    contract_calorific_value: Optional[HeatMeasurement] = None
+    contract_ash_max: Optional[PercentMeasurement] = None
+    contract_sulfur_max: Optional[PercentMeasurement] = None
+    contract_moisture_max: Optional[PercentMeasurement] = None
     arrival_date: Optional[datetime] = None
     notes: Optional[str] = None
 
@@ -78,6 +79,7 @@ def _batch_to_dict(batch: CoalBatch, supplier_name: str = "") -> dict:
 
 def _test_to_dict(t: QualityTest) -> dict:
     return {
+        **measurement_metadata(),
         "id": t.id,
         "batch_id": t.batch_id,
         "test_type": t.test_type,
@@ -127,7 +129,8 @@ def _build_comparison(port: Optional[QualityTest], factory: Optional[QualityTest
     def rate(pv, fv):
         if pv is None or fv is None or pv == 0:
             return None
-        return round((fv - pv) / pv, 6)
+        result = safe_rate(fv - pv, pv)
+        return round(result, 6) if result is not None else None
 
     return {
         "calorific_value_net": {
@@ -236,6 +239,7 @@ def get_batch(
     data["port_test"] = _test_to_dict(port_test) if port_test else None
     data["factory_test"] = _test_to_dict(factory_test) if factory_test else None
     data["comparison"] = _build_comparison(port_test, factory_test)
+    data["assessment"] = assessment(batch.tests)
     data["alerts"] = [_alert_to_dict(a) for a in batch.alerts]
     return api_response(data=data)
 
@@ -285,10 +289,12 @@ def evaluate_batch(
     return api_response(
         data={
             "batch_id": batch_id,
+            "assessment": assessment(batch.tests),
             "status": batch.status,
             "alert_count": batch.alert_count,
             "risk_score": batch.risk_score,
             "alerts": [_alert_to_dict(a) for a in alerts],
         },
-        message=f"评估完成，生成 {len(alerts)} 条预警",
+        message=(f"评估完成，生成 {len(alerts)} 条预警" if assessment(batch.tests)["complete"]
+                 else f"数据不完整，仅评估已提供指标，生成 {len(alerts)} 条预警"),
     )

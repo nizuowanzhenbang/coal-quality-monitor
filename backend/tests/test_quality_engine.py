@@ -459,7 +459,7 @@ class TestNullSafety:
         assert len(ash_alerts) == 0
 
     def test_all_none_no_crash(self, db_session, sample_batch):
-        """所有指标均为 None 时不崩溃，无预警"""
+        """所有指标均为 None 时不崩溃，无预警但不能认定完成。"""
         _make_test(db_session, sample_batch.id, TestType.PORT)
         _make_test(db_session, sample_batch.id, TestType.FACTORY)
 
@@ -473,7 +473,7 @@ class TestNullSafety:
         engine = QualityEngine()
         alerts = engine.evaluate(batch, db_session)
         assert len(alerts) == 0
-        assert batch.status == BatchStatus.COMPLETED
+        assert batch.status == BatchStatus.PARTIAL
 
     def test_idempotent_evaluate(self, db_session, sample_batch):
         """重复调用 evaluate 结果幂等（旧预警被替换）"""

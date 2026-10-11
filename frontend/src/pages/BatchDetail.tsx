@@ -14,6 +14,7 @@ import {
   Modal,
   Input,
   Divider,
+  Alert,
 } from 'antd'
 import {
   ArrowLeftOutlined,
@@ -103,18 +104,30 @@ export default function BatchDetail() {
     fetchBatch()
   }, [fetchBatch])
 
-  const portTest = batch?.tests?.find((t) => t.test_type === 'PORT') ?? null
-  const factoryTest = batch?.tests?.find((t) => t.test_type === 'FACTORY') ?? null
+  const portTest = batch?.port_test ?? batch?.tests?.find((t) => t.test_type === 'PORT') ?? null
+  const factoryTest = batch?.factory_test ?? batch?.tests?.find((t) => t.test_type === 'FACTORY') ?? null
+  const radarFields = ['calorific_value_net', 'ash_content', 'sulfur_content',
+    'moisture_total', 'volatile_matter', 'fixed_carbon'] as const
+  const radarComplete = [portTest, factoryTest].every((test) =>
+    test !== null && radarFields.every((field) => test[field] !== null && Number.isFinite(test[field])))
+  const metricNames: Record<string, string> = {
+    calorific_value_net: '收到基低位热值', ash_content: '干基灰分',
+    sulfur_content: '干基全硫', moisture_total: '全水分',
+  }
+  const missingSummary = Object.entries(batch?.assessment?.missing_by_source ?? {})
+    .filter(([, fields]) => fields.length)
+    .map(([source, fields]) => `${source === 'PORT' ? '港口' : '入厂'}：${fields.map((field) => metricNames[field] ?? field).join('、')}`)
+    .join('；')
 
   // 雷达图配置
   const radarOption: EChartsOption = (() => {
     const indicators = [
-      { name: '热值(Qnet)', max: 100 },
+      { name: '热值(Qnet,ar)', max: 100 },
       { name: '灰分(Ad)', max: 100 },
       { name: '硫分(St,d)', max: 100 },
       { name: '水分(Mt)', max: 100 },
-      { name: '挥发分(Vdaf)', max: 100 },
-      { name: '固定碳(FC)', max: 100 },
+      { name: '挥发分(Vd)', max: 100 },
+      { name: '固定碳(FCd)', max: 100 },
     ]
 
     // 热值：4000-8000 kcal/kg，越高越好，归一化正向
@@ -187,7 +200,7 @@ export default function BatchDetail() {
   const compareRows: CompareRow[] = [
     {
       key: 'calorific',
-      label: '热值 (Qnet)',
+      label: '低位热值 (Qnet,ar)',
       portValue: portTest?.calorific_value_net ?? null,
       factoryValue: factoryTest?.calorific_value_net ?? null,
       contractStd: batch?.contract_calorific_value !== null && batch?.contract_calorific_value !== undefined
@@ -231,7 +244,7 @@ export default function BatchDetail() {
     },
     {
       key: 'volatile',
-      label: '挥发分 (Vdaf)',
+      label: '挥发分 (Vd)',
       portValue: portTest?.volatile_matter ?? null,
       factoryValue: factoryTest?.volatile_matter ?? null,
       contractStd: null,
@@ -240,7 +253,7 @@ export default function BatchDetail() {
     },
     {
       key: 'fixedcarbon',
-      label: '固定碳 (FC)',
+      label: '固定碳 (FCd)',
       portValue: portTest?.fixed_carbon ?? null,
       factoryValue: factoryTest?.fixed_carbon ?? null,
       contractStd: null,
@@ -274,7 +287,7 @@ export default function BatchDetail() {
             ? ((row.factoryValue - row.portValue) / row.portValue) * 100
             : null
         const isAbnormal =
-          deviation !== null &&
+          deviation !== null && Number.isFinite(deviation) &&
           (row.higherIsBetter ? deviation < -2 : deviation > 2)
         return (
           <div
@@ -298,13 +311,15 @@ export default function BatchDetail() {
       render: (_: unknown, row: CompareRow) => {
         if (row.portValue === null || row.factoryValue === null) return '-'
         const diff = row.factoryValue - row.portValue
-        const rate = (diff / row.portValue) * 100
+        const rate = row.portValue === 0 ? null : (diff / row.portValue) * 100
         const isPositive = diff >= 0
         const isGood = row.higherIsBetter ? isPositive : !isPositive
         return (
           <Text style={{ color: isGood ? '#52c41a' : '#ff4d4f' }}>
             {isPositive ? '+' : ''}{diff.toFixed(2)} {row.unit}
-            {' '}({rate >= 0 ? '+' : ''}{rate.toFixed(2)}%)
+            {rate !== null && Number.isFinite(rate)
+              ? ` (${rate >= 0 ? '+' : ''}${rate.toFixed(2)}%)`
+              : '（相对偏差不可计算）'}
           </Text>
         )
       },
@@ -513,12 +528,23 @@ export default function BatchDetail() {
 
       {/* 化验对比 */}
       <Card title="化验对比分析" style={{ marginBottom: 16 }}>
+        {batch.assessment?.complete === false && (
+          <Alert type="warning" showIcon style={{ marginBottom: 16 }}
+            message="关键化验指标尚未齐全"
+            description={`${missingSummary}。当前预警仅依据已提供数据，缺项不代表合格。`} />
+        )}
+        <Typography.Paragraph type="secondary">
+          热值统一为 kcal/kg；低位热值为收到基，高位热值为空气干燥基。
+          灰分、全硫、挥发分和固定碳为干基；全水为收到基，内水为空气干燥基。
+        </Typography.Paragraph>
         <Row gutter={[24, 24]}>
           <Col xs={24} lg={10}>
             <div style={{ textAlign: 'center', marginBottom: 8 }}>
               <Text type="secondary">六维质量雷达图（港口 vs 入厂）</Text>
             </div>
-            <ReactECharts option={radarOption} style={{ height: 340 }} notMerge />
+            {radarComplete
+              ? <ReactECharts option={radarOption} style={{ height: 340 }} notMerge />
+              : <Alert type="info" message="双端六项指标齐全后显示雷达图" description="缺少的指标保留为空，不按零值生成质量分数。" />}
           </Col>
           <Col xs={24} lg={14}>
             <Table

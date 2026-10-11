@@ -1,10 +1,8 @@
 """化验记录接口"""
 from datetime import datetime, timezone
-from math import isfinite
-from typing import Annotated, Optional
+from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query
-from pydantic import BaseModel, BeforeValidator, FiniteFloat
 from sqlalchemy.orm import Session, joinedload
 
 from app.api.deps import get_db, get_current_user, require_operator
@@ -12,6 +10,7 @@ from app.models.batch import CoalBatch, BatchStatus
 from app.models.test import QualityTest, TestType
 from app.models.user import User
 from app.services.quality_engine import QualityEngine
+from app.services.measurements import MeasurementInput, CONTROL_FIELDS, measurement_metadata
 from app.utils.helpers import api_response, paginate_response
 
 router = APIRouter(prefix="/api/tests", tags=["化验记录"])
@@ -19,50 +18,25 @@ router = APIRouter(prefix="/api/tests", tags=["化验记录"])
 
 # ── Pydantic 模型 ──────────────────────────────────────────────────────────────
 
-def _normalize_nonfinite_input(value: object) -> object:
-    """将解析后的非有限数转成文本，确保校验错误详情可以序列化为 JSON。"""
-    if isinstance(value, float) and not isfinite(value):
-        return str(value)
-    return value
-
-
-FiniteMeasurement = Annotated[FiniteFloat, BeforeValidator(_normalize_nonfinite_input)]
-
-
-class TestCreateIn(BaseModel):
+class TestCreateIn(MeasurementInput):
     batch_id: int
     test_type: TestType
     test_org: Optional[str] = None
     test_time: Optional[datetime] = None
     report_number: Optional[str] = None
-    calorific_value_net: Optional[FiniteMeasurement] = None
-    calorific_value_gross: Optional[FiniteMeasurement] = None
-    ash_content: Optional[FiniteMeasurement] = None
-    sulfur_content: Optional[FiniteMeasurement] = None
-    moisture_total: Optional[FiniteMeasurement] = None
-    moisture_inherent: Optional[FiniteMeasurement] = None
-    volatile_matter: Optional[FiniteMeasurement] = None
-    fixed_carbon: Optional[FiniteMeasurement] = None
     notes: Optional[str] = None
 
 
-class TestUpdateIn(BaseModel):
+class TestUpdateIn(MeasurementInput):
     test_org: Optional[str] = None
     test_time: Optional[datetime] = None
     report_number: Optional[str] = None
-    calorific_value_net: Optional[FiniteMeasurement] = None
-    calorific_value_gross: Optional[FiniteMeasurement] = None
-    ash_content: Optional[FiniteMeasurement] = None
-    sulfur_content: Optional[FiniteMeasurement] = None
-    moisture_total: Optional[FiniteMeasurement] = None
-    moisture_inherent: Optional[FiniteMeasurement] = None
-    volatile_matter: Optional[FiniteMeasurement] = None
-    fixed_carbon: Optional[FiniteMeasurement] = None
     notes: Optional[str] = None
 
 
 def _test_to_dict(t: QualityTest) -> dict:
     return {
+        **measurement_metadata(),
         "id": t.id,
         "batch_id": t.batch_id,
         "test_type": t.test_type,
@@ -146,7 +120,7 @@ def create_test(
             detail=f"该批次已存在 {body.test_type} 化验记录，如需修改请使用 PUT /api/tests/{existing.id}",
         )
 
-    test = QualityTest(**body.model_dump())
+    test = QualityTest(**body.model_dump(exclude=CONTROL_FIELDS))
     db.add(test)
 
     # 更新批次状态
@@ -185,7 +159,7 @@ def update_test(
     if not test:
         raise HTTPException(status_code=404, detail="化验记录不存在")
 
-    for field, value in body.model_dump(exclude_unset=True).items():
+    for field, value in body.model_dump(exclude_unset=True, exclude=CONTROL_FIELDS).items():
         setattr(test, field, value)
     db.commit()
     db.refresh(test)
