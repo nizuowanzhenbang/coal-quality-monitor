@@ -125,3 +125,21 @@ def test_subnormal_baseline_has_json_safe_ratios_and_retains_absolute_alerts(api
         with api.factory() as db:
             assert all(a.deviation_rate is None for a in db.query(QualityAlert).all())
     assert data(api.client.get('/api/alerts')) is not None
+
+
+@pytest.mark.parametrize('operation', ['create', 'update'])
+@pytest.mark.parametrize('field', ['calorific_value_net', 'calorific_value_gross'])
+@pytest.mark.parametrize('unit', ['MJ/kg', 'kcal/kg'])
+def test_arbitrarily_large_integer_is_422_in_both_units_without_side_effects(api, operation, field, unit):
+    url, payload = prepare(api, operation)
+    assert_rejected(api, operation, url,
+                    {**payload, 'calorific_value_unit': unit, field: 10**400}, field)
+
+
+def test_scientific_notation_contract_remains_numeric_in_detail(api):
+    data(api.client.put(f'/api/batches/{api.batch_id}', json={'contract_ash_max': 1e-7}))
+    for kind in ['PORT', 'FACTORY']:
+        create(api, kind, {**NORMAL, 'ash_content': 1})
+    detail = data(api.client.get(f'/api/batches/{api.batch_id}'))
+    assert detail['contract_ash_max'] == 1e-7
+    assert detail['factory_test']['ash_content'] == 1

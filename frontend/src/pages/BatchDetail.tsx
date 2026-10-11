@@ -24,6 +24,7 @@ import {
 } from '@ant-design/icons'
 import type { ColumnsType } from 'antd/es/table'
 import ReactECharts from 'echarts-for-react'
+import ContractStatus from '../components/ContractStatus'
 import type { EChartsOption } from 'echarts'
 import { useParams, useNavigate } from 'react-router-dom'
 import { batchApi, alertApi } from '../api'
@@ -66,6 +67,7 @@ interface CompareRow {
   portValue: number | null
   factoryValue: number | null
   contractStd: string | null
+  contractValue: number | null
   unit: string
   higherIsBetter: boolean
 }
@@ -203,6 +205,7 @@ export default function BatchDetail() {
       label: '低位热值 (Qnet,ar)',
       portValue: portTest?.calorific_value_net ?? null,
       factoryValue: factoryTest?.calorific_value_net ?? null,
+      contractValue: batch?.contract_calorific_value ?? null,
       contractStd: batch?.contract_calorific_value !== null && batch?.contract_calorific_value !== undefined
         ? `≥${batch.contract_calorific_value}`
         : null,
@@ -214,6 +217,7 @@ export default function BatchDetail() {
       label: '灰分 (Ad)',
       portValue: portTest?.ash_content ?? null,
       factoryValue: factoryTest?.ash_content ?? null,
+      contractValue: batch?.contract_ash_max ?? null,
       contractStd: batch?.contract_ash_max !== null && batch?.contract_ash_max !== undefined
         ? `≤${batch.contract_ash_max}`
         : null,
@@ -225,6 +229,7 @@ export default function BatchDetail() {
       label: '硫分 (St,d)',
       portValue: portTest?.sulfur_content ?? null,
       factoryValue: factoryTest?.sulfur_content ?? null,
+      contractValue: batch?.contract_sulfur_max ?? null,
       contractStd: batch?.contract_sulfur_max !== null && batch?.contract_sulfur_max !== undefined
         ? `≤${batch.contract_sulfur_max}`
         : null,
@@ -236,6 +241,7 @@ export default function BatchDetail() {
       label: '水分 (Mt)',
       portValue: portTest?.moisture_total ?? null,
       factoryValue: factoryTest?.moisture_total ?? null,
+      contractValue: batch?.contract_moisture_max ?? null,
       contractStd: batch?.contract_moisture_max !== null && batch?.contract_moisture_max !== undefined
         ? `≤${batch.contract_moisture_max}`
         : null,
@@ -248,6 +254,7 @@ export default function BatchDetail() {
       portValue: portTest?.volatile_matter ?? null,
       factoryValue: factoryTest?.volatile_matter ?? null,
       contractStd: null,
+      contractValue: null,
       unit: '%',
       higherIsBetter: true,
     },
@@ -257,6 +264,7 @@ export default function BatchDetail() {
       portValue: portTest?.fixed_carbon ?? null,
       factoryValue: factoryTest?.fixed_carbon ?? null,
       contractStd: null,
+      contractValue: null,
       unit: '%',
       higherIsBetter: true,
     },
@@ -336,12 +344,7 @@ export default function BatchDetail() {
       key: 'contractStatus',
       align: 'center',
       render: (_: unknown, row: CompareRow) => {
-        if (row.contractStd === null || row.factoryValue === null) return <Tag>-</Tag>
-        const stdNum = parseFloat(row.contractStd.replace(/[^0-9.]/g, ''))
-        const isOk = row.higherIsBetter
-          ? row.factoryValue >= stdNum
-          : row.factoryValue <= stdNum
-        return <Tag color={isOk ? 'green' : 'red'}>{isOk ? '达标' : '超标'}</Tag>
+        return <ContractStatus standard={row.contractValue} actual={row.factoryValue} higherIsBetter={row.higherIsBetter} />
       },
     },
   ]

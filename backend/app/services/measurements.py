@@ -42,7 +42,7 @@ class MeasurementInput(BaseModel):
             return value
         try:
             return normalize_nonfinite(float(value) * 1000 / 4.1868)
-        except (ValueError, TypeError):
+        except (ValueError, TypeError, OverflowError):
             return value  # 交由有限数校验产生字段级错误。
 
     @field_validator('measurement_bases')

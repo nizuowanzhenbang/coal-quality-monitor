@@ -39,5 +39,7 @@ jobs:
           node-version: '22'
       - name: Install locked dependencies
         run: npm ci --no-audit --no-fund
+      - name: Contract status render regressions
+        run: npm test
       - name: Type check and production build
         run: npm run build
