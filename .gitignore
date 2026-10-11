@@ -30,3 +30,4 @@ dist/
 .pytest_cache/
 htmlcov/
 .coverage
+frontend/.test-output/

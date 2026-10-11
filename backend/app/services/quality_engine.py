@@ -8,6 +8,7 @@ from app.models.batch import CoalBatch, BatchStatus
 from app.models.test import QualityTest, TestType
 from app.models.alert import QualityAlert, AlertType, Severity
 from app.config import settings
+from app.services.measurements import assessment, safe_rate
 
 
 @dataclass
@@ -105,7 +106,7 @@ class QualityEngine:
             has_severe = any(a.severity == Severity.SEVERE for a in combined)
             batch.status = BatchStatus.SEVERE if has_severe else BatchStatus.ALERT
         else:
-            batch.status = BatchStatus.COMPLETED
+            batch.status = BatchStatus.COMPLETED if assessment(batch.tests)["complete"] else BatchStatus.PARTIAL
 
         batch.alert_count = len(combined)
         batch.risk_score = round(self._compute_risk_score(combined), 2)
@@ -152,10 +153,10 @@ class QualityEngine:
         results = []
         pv = port.calorific_value_net
         fv = factory.calorific_value_net
-        if pv and fv and pv > 0:
+        if pv is not None and fv is not None and pv > 0:
             deviation = pv - fv        # 正值 = 入厂低于港口（亏损）
-            rate = deviation / pv
-            if rate > settings.CALORIFIC_SEVERE_THRESHOLD:
+            rate = safe_rate(deviation, pv)
+            if rate is not None and rate > settings.CALORIFIC_SEVERE_THRESHOLD:
                 results.append(AlertData(
                     alert_type=AlertType.CALORIFIC_SHORTAGE,
                     severity=Severity.SEVERE,
@@ -166,7 +167,7 @@ class QualityEngine:
                     port_value=pv, factory_value=fv, deviation=deviation, deviation_rate=rate,
                     threshold_value=settings.CALORIFIC_SEVERE_THRESHOLD,
                 ))
-            elif rate > settings.CALORIFIC_GENERAL_THRESHOLD:
+            elif rate is not None and rate > settings.CALORIFIC_GENERAL_THRESHOLD:
                 results.append(AlertData(
                     alert_type=AlertType.CALORIFIC_SHORTAGE,
                     severity=Severity.GENERAL,
@@ -180,7 +181,7 @@ class QualityEngine:
 
         # 合同热值违约检查（以入厂热值为准）
         cv = batch.contract_calorific_value
-        if cv and fv:
+        if cv is not None and cv > 0 and fv is not None:
             shortfall = cv - fv   # 正值 = 入厂低于合同
             if shortfall > settings.CONTRACT_CAL_SEVERE:
                 results.append(AlertData(
@@ -191,7 +192,7 @@ class QualityEngine:
                         f"亏损 {shortfall:.0f} kcal/kg（阈值 {settings.CONTRACT_CAL_SEVERE:.0f}）"
                     ),
                     port_value=cv, factory_value=fv, deviation=shortfall,
-                    deviation_rate=shortfall / cv if cv else None,
+                    deviation_rate=safe_rate(shortfall, cv),
                     threshold_value=settings.CONTRACT_CAL_SEVERE,
                 ))
             elif shortfall > settings.CONTRACT_CAL_GENERAL:
@@ -203,7 +204,7 @@ class QualityEngine:
                         f"亏损 {shortfall:.0f} kcal/kg（阈值 {settings.CONTRACT_CAL_GENERAL:.0f}）"
                     ),
                     port_value=cv, factory_value=fv, deviation=shortfall,
-                    deviation_rate=shortfall / cv if cv else None,
+                    deviation_rate=safe_rate(shortfall, cv),
                     threshold_value=settings.CONTRACT_CAL_GENERAL,
                 ))
         return results
@@ -226,7 +227,7 @@ class QualityEngine:
                         f"偏差 +{deviation:.2f}%（阈值 {settings.ASH_SEVERE_THRESHOLD:.2f}%）"
                     ),
                     port_value=pv, factory_value=fv, deviation=deviation,
-                    deviation_rate=deviation / pv if pv else None,
+                    deviation_rate=safe_rate(deviation, pv),
                     threshold_value=settings.ASH_SEVERE_THRESHOLD,
                 ))
             elif deviation > settings.ASH_GENERAL_THRESHOLD:
@@ -238,7 +239,7 @@ class QualityEngine:
                         f"偏差 +{deviation:.2f}%（阈值 {settings.ASH_GENERAL_THRESHOLD:.2f}%）"
                     ),
                     port_value=pv, factory_value=fv, deviation=deviation,
-                    deviation_rate=deviation / pv if pv else None,
+                    deviation_rate=safe_rate(deviation, pv),
                     threshold_value=settings.ASH_GENERAL_THRESHOLD,
                 ))
 
@@ -254,7 +255,7 @@ class QualityEngine:
                         f"灰分严重超合同！入厂 {fv:.2f}%，合同上限 {ca:.2f}%，超出 {over:.2f}%"
                     ),
                     port_value=ca, factory_value=fv, deviation=over,
-                    deviation_rate=over / ca if ca else None,
+                    deviation_rate=safe_rate(over, ca),
                     threshold_value=settings.CONTRACT_ASH_SEVERE,
                 ))
             elif over > settings.CONTRACT_ASH_GENERAL:
@@ -265,7 +266,7 @@ class QualityEngine:
                         f"灰分超合同！入厂 {fv:.2f}%，合同上限 {ca:.2f}%，超出 {over:.2f}%"
                     ),
                     port_value=ca, factory_value=fv, deviation=over,
-                    deviation_rate=over / ca if ca else None,
+                    deviation_rate=safe_rate(over, ca),
                     threshold_value=settings.CONTRACT_ASH_GENERAL,
                 ))
         return results
@@ -288,7 +289,7 @@ class QualityEngine:
                         f"偏差 +{deviation:.3f}%（阈值 {settings.SULFUR_SEVERE_THRESHOLD:.3f}%）"
                     ),
                     port_value=pv, factory_value=fv, deviation=deviation,
-                    deviation_rate=deviation / pv if pv else None,
+                    deviation_rate=safe_rate(deviation, pv),
                     threshold_value=settings.SULFUR_SEVERE_THRESHOLD,
                 ))
             elif deviation > settings.SULFUR_GENERAL_THRESHOLD:
@@ -300,7 +301,7 @@ class QualityEngine:
                         f"偏差 +{deviation:.3f}%（阈值 {settings.SULFUR_GENERAL_THRESHOLD:.3f}%）"
                     ),
                     port_value=pv, factory_value=fv, deviation=deviation,
-                    deviation_rate=deviation / pv if pv else None,
+                    deviation_rate=safe_rate(deviation, pv),
                     threshold_value=settings.SULFUR_GENERAL_THRESHOLD,
                 ))
 
@@ -316,7 +317,7 @@ class QualityEngine:
                         f"硫分严重超合同！入厂 {fv:.3f}%，合同上限 {cs:.3f}%，超出 {over:.3f}%"
                     ),
                     port_value=cs, factory_value=fv, deviation=over,
-                    deviation_rate=over / cs if cs else None,
+                    deviation_rate=safe_rate(over, cs),
                     threshold_value=settings.CONTRACT_SULFUR_SEVERE,
                 ))
             elif over > settings.CONTRACT_SULFUR_GENERAL:
@@ -327,7 +328,7 @@ class QualityEngine:
                         f"硫分超合同！入厂 {fv:.3f}%，合同上限 {cs:.3f}%，超出 {over:.3f}%"
                     ),
                     port_value=cs, factory_value=fv, deviation=over,
-                    deviation_rate=over / cs if cs else None,
+                    deviation_rate=safe_rate(over, cs),
                     threshold_value=settings.CONTRACT_SULFUR_GENERAL,
                 ))
         return results
@@ -348,7 +349,7 @@ class QualityEngine:
                         f"偏差 +{deviation:.2f}%（阈值 {settings.MOISTURE_SEVERE_THRESHOLD:.1f}%）"
                     ),
                     port_value=pv, factory_value=fv, deviation=deviation,
-                    deviation_rate=deviation / pv if pv else None,
+                    deviation_rate=safe_rate(deviation, pv),
                     threshold_value=settings.MOISTURE_SEVERE_THRESHOLD,
                 ))
             elif deviation > settings.MOISTURE_GENERAL_THRESHOLD:
@@ -360,7 +361,7 @@ class QualityEngine:
                         f"偏差 +{deviation:.2f}%（阈值 {settings.MOISTURE_GENERAL_THRESHOLD:.1f}%）"
                     ),
                     port_value=pv, factory_value=fv, deviation=deviation,
-                    deviation_rate=deviation / pv if pv else None,
+                    deviation_rate=safe_rate(deviation, pv),
                     threshold_value=settings.MOISTURE_GENERAL_THRESHOLD,
                 ))
         return results

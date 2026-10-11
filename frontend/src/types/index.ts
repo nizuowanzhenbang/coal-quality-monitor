@@ -57,6 +57,12 @@ export interface CoalBatch {
   created_at: string
   updated_at: string
   tests?: QualityTest[]
+  port_test?: QualityTest | null
+  factory_test?: QualityTest | null
+  assessment?: {
+    complete: boolean
+    missing_by_source: Record<TestType, string[]>
+  }
   alerts?: QualityAlert[]
 }
 
@@ -64,6 +70,9 @@ export interface CoalBatch {
 export type TestType = 'PORT' | 'FACTORY'
 
 export interface QualityTest {
+  calorific_value_unit?: 'kcal/kg'
+  measurement_bases?: Record<string, 'ar' | 'ad' | 'd'>
+  measurement_units?: Record<string, string>
   id: number
   batch_id: number
   test_type: TestType
