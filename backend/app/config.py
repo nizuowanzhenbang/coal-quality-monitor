@@ -46,6 +46,7 @@ class Settings(BaseSettings):
 
     # 闭环集成：运输监督系统
     INTEGRATION_SECRET: str = "coal-integration-shared-secret"
+    QUALITY_SOURCE_INSTANCE: str = ""  # 部署方配置的稳定实例身份；留空禁止导出
 
     model_config = {"env_file": ".env", "case_sensitive": True}
 

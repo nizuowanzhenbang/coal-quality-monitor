@@ -1,10 +1,14 @@
 """化验记录接口"""
-from datetime import datetime, timezone
-from typing import Optional
+from datetime import datetime, timedelta, timezone
+from math import isfinite
+import re
+from typing import Annotated, Optional
 
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Path, Query
+from pydantic import BaseModel, BeforeValidator, ConfigDict, Field, StrictInt, field_validator
 from sqlalchemy.orm import Session, joinedload
 
+from app.config import settings
 from app.api.deps import get_db, get_current_user, require_operator
 from app.models.batch import CoalBatch, BatchStatus
 from app.models.test import QualityTest, TestType
@@ -175,3 +179,63 @@ def update_test(
         _try_auto_evaluate(batch, db)
 
     return api_response(data=_test_to_dict(test), message="更新成功")
+
+
+class EnergyMeasurementDeclaration(BaseModel):
+    model_config = ConfigDict(extra='forbid')
+    offset_minutes: StrictInt = Field(ge=-840, le=840)
+    time_evidence: str = Field(min_length=1, max_length=500)
+
+    @field_validator('time_evidence')
+    @classmethod
+    def evidence_not_blank(cls, value):
+        if not value.strip():
+            raise ValueError('请提供时区来源依据')
+        return value
+
+
+def sanitize_invalid_numbers(value):
+    # 确保校验失败响应本身可序列化；无穷值不能成为合法声明。
+    if isinstance(value, float) and not isfinite(value):
+        return None
+    if isinstance(value, list):
+        return [sanitize_invalid_numbers(item) for item in value]
+    if isinstance(value, dict):
+        return {key: sanitize_invalid_numbers(item) for key, item in value.items()}
+    return value
+
+
+@router.post('/{test_id}/energy-measurement', response_model=dict, summary='导出能效情景所需的煤质化验数据')
+def export_energy_measurement(
+    test_id: Annotated[int, Path(ge=1, le=9223372036854775807)],
+    body: Annotated[EnergyMeasurementDeclaration, BeforeValidator(sanitize_invalid_numbers)],
+    db: Session = Depends(get_db), _: User = Depends(require_operator),
+):
+    instance = settings.QUALITY_SOURCE_INSTANCE
+    if not re.fullmatch(r'\S(?:.*\S)?', instance) or len(instance) > 128:
+        raise HTTPException(status_code=503, detail='未配置有效的煤质来源实例标识')
+    test = db.query(QualityTest).filter(QualityTest.id == test_id).first()
+    if test is None:
+        raise HTTPException(status_code=404, detail='化验记录不存在')
+    value = test.calorific_value_net
+    if test.test_type != TestType.FACTORY or value is None or not isfinite(value) or not 0 < value <= 10000:
+        raise HTTPException(status_code=422, detail='需要范围内的入厂收到基低位热值')
+    if test.test_time is None or test.test_time.tzinfo is not None:
+        raise HTTPException(status_code=422, detail='化验时间缺失或存储时区形式不支持声明')
+    measured = test.test_time.replace(tzinfo=timezone(timedelta(minutes=body.offset_minutes)))
+    try:
+        measured.astimezone(timezone.utc)
+    except (OverflowError, ValueError) as exc:
+        raise HTTPException(status_code=422, detail='声明的时间转换UTC超出范围') from exc
+    return api_response(data={
+        'measurement': {
+            'source_system': 'coal-quality-monitor', 'source_instance': instance,
+            'batch_id': str(test.batch_id), 'test_id': str(test.id),
+            'metric': 'Qnet', 'basis': 'ar', 'unit': 'kcal/kg',
+            'value': value, 'measured_at': measured.isoformat(),
+        },
+        'time_provenance': {
+            'kind': 'caller_declared_offset', 'offset_minutes': body.offset_minutes,
+            'evidence': body.time_evidence, 'stored_time': test.test_time.isoformat(),
+        },
+    })

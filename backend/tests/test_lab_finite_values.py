@@ -225,3 +225,82 @@ def test_existing_authorization_still_blocks_create_and_update(api, actor, expec
     response = api.client.put(f"/api/tests/{factory_test['id']}", json={"ash_content": 16})
     assert response.status_code == expected
     assert snapshot(api) == before
+
+
+def test_energy_export_from_record_requires_identity_and_explicit_time_source(api, monkeypatch):
+    monkeypatch.setitem(settings.__dict__, 'QUALITY_SOURCE_INSTANCE', 'plant-a')
+    record = create(api, 'FACTORY', {'calorific_value_net': 4000, 'test_time': '2026-10-28T08:00:00'})
+    url = f"/api/tests/{record['id']}/energy-measurement"
+    assert api.client.post(url, json={}).status_code == 422
+    body = {'offset_minutes': 480, 'time_evidence': '实验室记录标注北京时间'}
+    response = api.client.post(url, json=body)
+    assert response.status_code == 200, response.text
+    result = response.json()['data']
+    assert result['measurement'] == {
+        'source_system': 'coal-quality-monitor', 'source_instance': 'plant-a',
+        'batch_id': str(api.batch_id), 'test_id': str(record['id']),
+        'metric': 'Qnet', 'basis': 'ar', 'unit': 'kcal/kg', 'value': 4000,
+        'measured_at': '2026-10-28T08:00:00+08:00',
+    }
+    assert result['time_provenance']['kind'] == 'caller_declared_offset'
+    assert result['time_provenance']['evidence'] == body['time_evidence']
+    assert api.client.post(url, json=body, headers=api.viewer_headers).status_code == 403
+    monkeypatch.setitem(settings.__dict__, 'QUALITY_SOURCE_INSTANCE', '')
+    assert api.client.post(url, json=body).status_code == 503
+
+
+def test_energy_export_rejects_missing_invalid_and_port_records(api, monkeypatch):
+    monkeypatch.setitem(settings.__dict__, 'QUALITY_SOURCE_INSTANCE', 'plant-a')
+    port = create(api, 'PORT', {'calorific_value_net': 4000, 'test_time': '2026-10-28T08:00:00'})
+    body = {'offset_minutes': 480, 'time_evidence': '确认时区'}
+    url = f"/api/tests/{port['id']}/energy-measurement"
+    assert api.client.post(url, json=body).status_code == 422
+    assert api.client.post('/api/tests/999999/energy-measurement', json=body).status_code == 404
+    lab = create(api, 'FACTORY', {})
+    url = f"/api/tests/{lab['id']}/energy-measurement"
+    assert api.client.post(url, json=body).status_code == 422
+    assert api.client.post(url, json={'offset_minutes': 841, 'time_evidence': '确认'}).status_code == 422
+    assert api.client.post(url, json={'offset_minutes': 480, 'time_evidence': ' '}).status_code == 422
+
+
+@pytest.mark.parametrize('value', [None, 0, -1, 10001, float('inf')])
+def test_energy_export_rejects_invalid_stored_heat(api, monkeypatch, value):
+    monkeypatch.setitem(settings.__dict__, 'QUALITY_SOURCE_INSTANCE', 'plant-a')
+    lab = create(api, 'FACTORY', {'test_time': '2026-10-28T08:00:00'})
+    with api.factory() as db:
+        db.get(QualityTest, lab['id']).calorific_value_net = value
+        db.commit()
+    response = api.client.post(f"/api/tests/{lab['id']}/energy-measurement", json={
+        'offset_minutes': 480, 'time_evidence': '确认时区',
+    })
+    assert response.status_code == 422
+
+
+def test_energy_export_rejects_utc_overflow_and_does_not_change_record(api, monkeypatch):
+    monkeypatch.setitem(settings.__dict__, 'QUALITY_SOURCE_INSTANCE', 'plant-a')
+    lab = create(api, 'FACTORY', {'calorific_value_net': 4000, 'test_time': '0001-01-01T00:00:00'})
+    url = f"/api/tests/{lab['id']}/energy-measurement"
+    before = api.client.get(f"/api/tests/{lab['id']}").json()
+    assert api.client.post(url, json={'offset_minutes': 480, 'time_evidence': '确认'}).status_code == 422
+    assert api.client.get(f"/api/tests/{lab['id']}").json() == before
+
+
+@pytest.mark.parametrize('body', [
+    '{"offset_minutes":1e999,"time_evidence":"确认"}',
+    '{"offset_minutes":480,"time_evidence":1e999}',
+    '{"offset_minutes":480,"time_evidence":"确认","extra":{"nested":[1e999]}}',
+])
+def test_energy_export_nonfinite_invalid_request_returns_json_422(api, monkeypatch, body):
+    monkeypatch.setitem(settings.__dict__, 'QUALITY_SOURCE_INSTANCE', 'plant-a')
+    lab = create(api, 'FACTORY', {'calorific_value_net': 4000, 'test_time': '2026-10-28T08:00:00'})
+    response = api.client.post(f"/api/tests/{lab['id']}/energy-measurement", content=body,
+                               headers={'Content-Type': 'application/json'})
+    assert response.status_code == 422, response.text
+    assert response.json()['detail']
+
+
+def test_energy_export_rejects_oversized_record_id(api, monkeypatch):
+    monkeypatch.setitem(settings.__dict__, 'QUALITY_SOURCE_INSTANCE', 'plant-a')
+    response = api.client.post('/api/tests/999999999999999999999999999/energy-measurement',
+                               json={'offset_minutes': 480, 'time_evidence': '确认'})
+    assert response.status_code == 422
