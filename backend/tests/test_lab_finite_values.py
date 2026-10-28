@@ -283,3 +283,24 @@ def test_energy_export_rejects_utc_overflow_and_does_not_change_record(api, monk
     before = api.client.get(f"/api/tests/{lab['id']}").json()
     assert api.client.post(url, json={'offset_minutes': 480, 'time_evidence': '确认'}).status_code == 422
     assert api.client.get(f"/api/tests/{lab['id']}").json() == before
+
+
+@pytest.mark.parametrize('body', [
+    '{"offset_minutes":1e999,"time_evidence":"确认"}',
+    '{"offset_minutes":480,"time_evidence":1e999}',
+    '{"offset_minutes":480,"time_evidence":"确认","extra":{"nested":[1e999]}}',
+])
+def test_energy_export_nonfinite_invalid_request_returns_json_422(api, monkeypatch, body):
+    monkeypatch.setitem(settings.__dict__, 'QUALITY_SOURCE_INSTANCE', 'plant-a')
+    lab = create(api, 'FACTORY', {'calorific_value_net': 4000, 'test_time': '2026-10-28T08:00:00'})
+    response = api.client.post(f"/api/tests/{lab['id']}/energy-measurement", content=body,
+                               headers={'Content-Type': 'application/json'})
+    assert response.status_code == 422, response.text
+    assert response.json()['detail']
+
+
+def test_energy_export_rejects_oversized_record_id(api, monkeypatch):
+    monkeypatch.setitem(settings.__dict__, 'QUALITY_SOURCE_INSTANCE', 'plant-a')
+    response = api.client.post('/api/tests/999999999999999999999999999/energy-measurement',
+                               json={'offset_minutes': 480, 'time_evidence': '确认'})
+    assert response.status_code == 422

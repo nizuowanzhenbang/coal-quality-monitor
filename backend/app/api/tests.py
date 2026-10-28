@@ -2,10 +2,10 @@
 from datetime import datetime, timedelta, timezone
 from math import isfinite
 import re
-from typing import Optional
+from typing import Annotated, Optional
 
-from fastapi import APIRouter, Depends, HTTPException, Query
-from pydantic import BaseModel, ConfigDict, Field, StrictInt, field_validator
+from fastapi import APIRouter, Depends, HTTPException, Path, Query
+from pydantic import BaseModel, BeforeValidator, ConfigDict, Field, StrictInt, field_validator
 from sqlalchemy.orm import Session, joinedload
 
 from app.config import settings
@@ -194,9 +194,21 @@ class EnergyMeasurementDeclaration(BaseModel):
         return value
 
 
+def sanitize_invalid_numbers(value):
+    # 确保校验失败响应本身可序列化；无穷值不能成为合法声明。
+    if isinstance(value, float) and not isfinite(value):
+        return None
+    if isinstance(value, list):
+        return [sanitize_invalid_numbers(item) for item in value]
+    if isinstance(value, dict):
+        return {key: sanitize_invalid_numbers(item) for key, item in value.items()}
+    return value
+
+
 @router.post('/{test_id}/energy-measurement', response_model=dict, summary='导出能效情景所需的煤质化验数据')
 def export_energy_measurement(
-    test_id: int, body: EnergyMeasurementDeclaration,
+    test_id: Annotated[int, Path(ge=1, le=9223372036854775807)],
+    body: Annotated[EnergyMeasurementDeclaration, BeforeValidator(sanitize_invalid_numbers)],
     db: Session = Depends(get_db), _: User = Depends(require_operator),
 ):
     instance = settings.QUALITY_SOURCE_INSTANCE
