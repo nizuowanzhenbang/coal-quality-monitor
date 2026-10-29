@@ -43,3 +43,29 @@ jobs:
         run: npm test
       - name: Type check and production build
         run: npm run build
+  coal_energy_contract:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - name: Checkout fixed energy peer
+        uses: actions/checkout@v4
+        with:
+          repository: nizuowanzhenbang/coal-unit-efficiency
+          ref: 30e8e6af92d796d6889875ec55b1de24c1ca13fe
+          path: energy-peer
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Install isolated dependencies
+        run: |
+          python -m venv "$RUNNER_TEMP/quality-contract-env"
+          python -m venv "$RUNNER_TEMP/energy-contract-env"
+          "$RUNNER_TEMP/quality-contract-env/bin/python" -m pip install -r backend/requirements.txt
+          "$RUNNER_TEMP/energy-contract-env/bin/python" -m pip install -r energy-peer/backend/requirements.txt
+      - name: Real coal export to energy preview contract
+        working-directory: backend
+        env:
+          ENERGY_PEER_ROOT: ${{ github.workspace }}/energy-peer
+          ENERGY_PEER_PYTHON: ${{ runner.temp }}/energy-contract-env/bin/python
+        run: '"$RUNNER_TEMP/quality-contract-env/bin/python" -m pytest tests/contract_coal_energy.py -q'
