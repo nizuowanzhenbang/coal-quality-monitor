@@ -52,7 +52,7 @@ jobs:
         uses: actions/checkout@v4
         with:
           repository: nizuowanzhenbang/coal-unit-efficiency
-          ref: 30e8e6af92d796d6889875ec55b1de24c1ca13fe
+          ref: a214bfddd79236f4bd9930899344c7b08e0b0db2
           path: energy-peer
       - uses: actions/setup-python@v5
         with:

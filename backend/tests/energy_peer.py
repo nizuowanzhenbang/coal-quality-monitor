@@ -2,6 +2,7 @@
 from copy import deepcopy
 import json
 import sys
+from uuid import uuid4
 
 from fastapi.testclient import TestClient
 from app.database import Base, SessionLocal, engine
@@ -45,10 +46,35 @@ def main():
             altered[section][key] = bad
             errors[label] = client.post('/api/integration/coal-quality-preview', json=altered,
                                         headers=headers).status_code
+        saved = client.post('/api/integration/coal-quality-measurements', json={
+            'request_id': str(uuid4()), 'measurement': measurement,
+            'time_provenance': export['time_provenance']}, headers=headers)
+        assert saved.status_code == 201, saved.text
+        evidence = saved.json()
+        assert client.get(f"/api/integration/coal-quality-measurements/{evidence['id']}", headers=headers).json() == evidence
+        allocation = client.post('/api/integration/coal-quality-allocations', json={
+            'request_id': str(uuid4()), **body['allocation'], 'evidence': '合成跨系统契约'}, headers=headers)
+        assert allocation.status_code == 201, allocation.text
+        selected = {'measurement_id': evidence['id'], 'allocation_id': allocation.json()['id'],
+                    'conditions': body['conditions']}
+        preview = client.post('/api/integration/coal-quality-preview/evidenced', json=selected, headers=headers)
+        assert preview.status_code == 200, preview.text
+        assert preview.json()['measurement_evidence'] == evidence
+        assert preview.json()['coal_lhv_kj_kg'] == outcome['coal_lhv_kj_kg']
+        bad_time = deepcopy(export['time_provenance'])
+        bad_time['offset_minutes'] = 0
+        assert client.post('/api/integration/coal-quality-measurements', json={
+            'request_id': str(uuid4()), 'measurement': measurement, 'time_provenance': bad_time}, headers=headers).status_code == 422
+        wrong_allocation = client.post('/api/integration/coal-quality-allocations', json={
+            'request_id': str(uuid4()), **body['allocation'], 'source_instance': 'wrong-instance',
+            'evidence': '合成错误关联'}, headers=headers)
+        assert wrong_allocation.status_code == 201
+        assert client.post('/api/integration/coal-quality-preview/evidenced', json={
+            **selected, 'allocation_id': wrong_allocation.json()['id']}, headers=headers).status_code == 422
     with SessionLocal() as db:
         count = db.query(OperatingSnapshot).count()
     print(json.dumps({'heat': outcome['coal_lhv_kj_kg'], 'measurement': outcome['lineage']['measurement'],
-                      'snapshot_count': count, **errors}, ensure_ascii=False))
+                      'snapshot_count': count, 'evidence': evidence, **errors}, ensure_ascii=False))
 
 
 if __name__ == '__main__':
