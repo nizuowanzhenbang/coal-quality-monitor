@@ -16,6 +16,12 @@ def test_real_export_to_energy_preview(api, monkeypatch, tmp_path):
     response = api.client.post(url, json={'offset_minutes': 480, 'time_evidence': '合成实验室记录：UTC+08'})
     assert response.status_code == 200, response.text
     export = response.json()['data']
+    assert export['measurement'] == {
+        'source_system': 'coal-quality-monitor', 'source_instance': 'synthetic-instance-a',
+        'batch_id': str(api.batch_id), 'test_id': str(lab['id']), 'metric': 'Qnet',
+        'basis': 'ar', 'unit': 'kcal/kg', 'value': 4000,
+        'measured_at': '2026-10-28T08:00:00+08:00',
+    }
     assert export['time_provenance'] == {'kind': 'caller_declared_offset', 'offset_minutes': 480,
                                          'evidence': '合成实验室记录：UTC+08',
                                          'stored_time': '2026-10-28T08:00:00'}
