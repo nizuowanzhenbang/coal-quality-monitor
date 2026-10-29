@@ -41,3 +41,8 @@ def test_real_export_to_energy_preview(api, monkeypatch, tmp_path):
     assert outcome['measurement'] == export['measurement']
     assert outcome['snapshot_count'] == 0
     assert outcome['wrong_instance'] == outcome['wrong_batch'] == outcome['wrong_basis'] == 422
+
+    assert outcome['evidence']['measurement'] == export['measurement']
+    assert outcome['evidence']['time_provenance'] == export['time_provenance']
+    assert outcome['evidence']['created_by'] == 'contract'
+    assert outcome['evidence']['kind'] == 'operator_submitted'
